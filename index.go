@@ -21,6 +21,8 @@ type Index interface {
 
 	// GetANNbyVector ... search approximate nearest neighbors by a given query vector
 	GetANNbyVector(v []float64, searchNum int, bucketScale float64) (ann []int64, err error)
+
+	GetVectorByItemId(id int64) (vector []float64, found bool)
 }
 
 type index struct {
@@ -114,4 +116,12 @@ func (idx *index) build(items []*item, nTree int) {
 		}()
 	}
 	wg.Wait()
+}
+
+func (idx *index) GetVectorByItemId(id int64) ([]float64, bool) {
+	it, ok := idx.itemIDToItem[itemId(id)]
+	if !ok {
+		return nil, false
+	}
+	return it.vector, true
 }

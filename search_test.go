@@ -211,3 +211,249 @@ func TestAnnSearchAccuracy(t *testing.T) {
 		})
 	}
 }
+
+func hashDistance(hash1 []float64, hash2 []float64) float64 {
+	distance := float64(0)
+	for i := 0; i < len(hash1); i++ {
+		tmp := (hash1[i] - hash2[i]) * 1000
+		distance += float64(tmp * tmp)
+	}
+	return distance
+}
+
+func CopyHash(hash []float64) []float64 {
+	copy := make([]float64, len(hash))
+	for i := 0; i < len(hash); i++ {
+		copy[i] = hash[i]
+	}
+	return copy
+}
+
+func getRandomInt8() float64 {
+	return float64((rand.Intn(128) - 128)) / 1000
+}
+
+func TestIndex_GetANNbyVector_Existing(t *testing.T) {
+	dim := 144
+	num := 100000
+	nTree := 4
+	k := 2
+
+	rawItems := make([][]float64, num)
+	for i := range rawItems {
+		v := make([]float64, dim)
+
+		var norm float64
+		for j := range v {
+			cof := getRandomInt8()
+			v[j] = cof
+			norm += cof * cof
+		}
+
+		norm = math.Sqrt(norm)
+		for j := range v {
+			v[j] /= norm
+		}
+		rawItems[i] = v
+	}
+
+	m, err := metric.NewCosineMetric(dim)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	idx, err := CreateNewIndex(rawItems, dim, nTree, k, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < num; i++ {
+		keyCopy := CopyHash(rawItems[i])
+		res, _ := idx.GetANNbyVector(keyCopy, 20, 6)
+
+		if int64(i) != res[0] {
+			t.Fatalf("%d not the first\n", i)
+		}
+	}
+}
+
+func testIndex_GetANNbyVector_Existing_With_Diff(t *testing.T, diffInt int, num int) {
+	dim := 144
+	nTree := 4
+	k := 2
+
+	rawItems := make([][]float64, num)
+	for i := range rawItems {
+		v := make([]float64, dim)
+
+		var norm float64
+		for j := range v {
+			cof := getRandomInt8()
+			v[j] = cof
+			norm += cof * cof
+		}
+		norm = math.Sqrt(norm)
+		for j := range v {
+			v[j] /= norm
+		}
+		rawItems[i] = v
+	}
+
+	m, err := metric.NewCosineMetric(dim)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	idx, err := CreateNewIndex(rawItems, dim, nTree, k, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	diff := float64(diffInt) / 1000
+
+	for i := 0; i < num; i++ {
+		keyCopy := CopyHash(rawItems[i])
+		for j := 0; j < len(keyCopy); j++ {
+			if 255-keyCopy[j] > diff {
+				keyCopy[j] += diff
+			} else {
+				keyCopy[j] -= diff
+			}
+		}
+
+		res, _ := idx.GetANNbyVector(keyCopy, 20, 6)
+
+		if int64(i) != res[0] {
+			t.Fatalf("%d not the first\n", i)
+		}
+	}
+}
+
+func TestIndex_GetANNbyVector_Existing_With_Diff_1(t *testing.T) {
+	testIndex_GetANNbyVector_Existing_With_Diff(t, 1, 20000)
+}
+
+func TestIndex_GetANNbyVector_Existing_With_Diff_2(t *testing.T) {
+	testIndex_GetANNbyVector_Existing_With_Diff(t, 2, 20000)
+}
+
+func TestIndex_GetANNbyVector_Existing_With_Diff_5(t *testing.T) {
+	testIndex_GetANNbyVector_Existing_With_Diff(t, 5, 20000)
+}
+
+func TestIndex_GetANNbyVector_Existing_With_Diff_10(t *testing.T) {
+	testIndex_GetANNbyVector_Existing_With_Diff(t, 10, 20000)
+}
+
+func TestIndex_GetANNbyVector_Existing_With_Diff_20(t *testing.T) {
+	testIndex_GetANNbyVector_Existing_With_Diff(t, 20, 20000)
+}
+
+func BenchmarkIndex_GetANNbyVector_Random_100000(b *testing.B) {
+	dim := 144
+	num := 100000
+	nTree := 4
+	k := 2
+
+	rawItems := make([][]float64, num)
+	for i := range rawItems {
+		v := make([]float64, dim)
+
+		var norm float64
+		for j := range v {
+			cof := getRandomInt8()
+			v[j] = cof
+			norm += cof * cof
+		}
+
+		norm = math.Sqrt(norm)
+		for j := range v {
+			v[j] /= norm
+		}
+		rawItems[i] = v
+	}
+
+	m, err := metric.NewCosineMetric(dim)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	idx, err := CreateNewIndex(rawItems, dim, nTree, k, m)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	key := make([]float64, dim)
+	for i := range key {
+		key[i] = getRandomInt8()
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := idx.GetANNbyVector(key, 10, 2)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkIndex_GetANNbyVector_Existing_50000(b *testing.B) {
+	dim := 144
+	num := 50000
+	nTree := 4
+	k := 2
+
+	rawItems := make([][]float64, num)
+	for i := range rawItems {
+		v := make([]float64, dim)
+
+		var norm float64
+		for j := range v {
+			cof := getRandomInt8()
+			v[j] = cof
+			norm += cof * cof
+		}
+
+		rawItems[i] = v
+	}
+
+	m, err := metric.NewCosineMetric(dim)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	idx, err := CreateNewIndex(rawItems, dim, nTree, k, m)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		keyNum := i % len(rawItems)
+		key := rawItems[keyNum]
+
+		res, err := idx.GetANNbyVector(key, 10, 2)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		if len(res) == 0 {
+			b.Fatalf("looking for %d, but found none", keyNum)
+		}
+
+		if res[0] != int64(keyNum) {
+			inRes := false
+			for _, foundId := range res {
+				if foundId == int64(keyNum) {
+					inRes = true
+					break
+				}
+			}
+			if !inRes {
+				found, _ := idx.GetVectorByItemId(res[0])
+				b.Fatalf("looking for %d:\n%v\n, but found %d (%v):\n%v\ndistance: %f\n", keyNum, rawItems[keyNum], res[0], res, found, hashDistance(rawItems[keyNum], found))
+			}
+		}
+	}
+}
